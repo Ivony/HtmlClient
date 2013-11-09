@@ -15,33 +15,49 @@ namespace Ivony.Html.Client
     private HttpClient client = new HttpClient();
 
 
-    public virtual IHtmlParser GetParser()
+    protected virtual IHtmlParser GetParser()
     {
       return new JumonyParser();
     }
 
 
-    public async Task<IHtmlDocument> Get( Uri requestUri )
+
+    public Task<IHtmlDocument> Get( string requestUri )
+    {
+      return GetCore( new Uri( requestUri ) );
+    }
+
+    public Task<IHtmlDocument> Get( Uri requestUri )
+    {
+      return GetCore( requestUri );
+    }
+
+    private async Task<IHtmlDocument> GetCore( Uri requestUri )
     {
       var result = await client.GetAsync( requestUri );
       if ( !result.IsSuccessStatusCode )
         throw new HttpException( result );
 
-      var content = await LoadText( result.Content );
+
+      if ( result.Content.Headers.ContentType.MediaType != "text/html" )
+        return null;
+
+      var content = await LoadTextContent( result.Content );
 
       return GetParser().Parse( content, requestUri );
     }
 
-    protected virtual async Task<string> LoadText( HttpContent httpContent )
+    protected virtual async Task<string> LoadTextContent( HttpContent httpContent )
     {
       return await httpContent.ReadAsStringAsync();
     }
 
 
 
-    void IDisposable.Dispose()
+    public void Dispose()
     {
       client.Dispose();
     }
+
   }
 }
