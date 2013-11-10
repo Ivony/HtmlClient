@@ -127,12 +127,18 @@ namespace Ivony.Html.Client
       return refer.Host == traceUri.Host;
     }
 
-    protected virtual string[] FindLinks( IHtmlDocument document )
+    protected virtual IEnumerable<string> FindLinks( IHtmlDocument document )
     {
+
       document.ResolveUriToAbsoluate();
-      return document.Find( "a[href]" )
-        .Select( element => element.Attribute( "href" ).Value() )
-        .ToArray();
+
+      foreach ( var href in document.Find( "a[href]" ).Select( element => element.Attribute( "href" ).Value() ) )
+      {
+        var uri = new UriBuilder( new Uri( document.DocumentUri, href ) );
+        uri.Fragment = null;
+        yield return uri.Uri.AbsoluteUri;
+      }
+
     }
 
 
