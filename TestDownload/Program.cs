@@ -14,7 +14,8 @@ namespace TestDownload
 
       var client = new HtmlSiteDownloader();
 
-      client.RetrieveAllPages( "http://www.cnblogs.com/" ).Wait();
+      var task = client.RetrieveAllPages( "http://www.cnblogs.com/" );
+      task.Wait();
 
     }
 

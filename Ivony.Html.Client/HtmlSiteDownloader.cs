@@ -5,15 +5,16 @@ using System.Text;
 using System.Threading.Tasks;
 using Ivony.Html;
 using System.IO;
+using Ivony.Fluent;
 
 namespace Ivony.Html.Client
 {
   public class HtmlSiteDownloader : IDisposable
   {
 
-    public HtmlSiteDownloader() : this(new HtmlClient()) { }
+    public HtmlSiteDownloader() : this( new HtmlClient() ) { }
 
-    public HtmlSiteDownloader(HtmlClient client)
+    public HtmlSiteDownloader( HtmlClient client )
     {
       Client = client;
     }
@@ -31,70 +32,65 @@ namespace Ivony.Html.Client
 
     private object sync = new object();
 
-    public IHtmlDocument[] RetrieveAllPages(string entryUri)
+    public Task RetrieveAllPages( string entryUri )
     {
-      return RetrieveAllPages(new Uri(entryUri));
+      return RetrieveAllPages( new Uri( entryUri ) );
     }
 
 
-    public IHtmlDocument[] RetrieveAllPages(Uri entryUri)
+    public Task RetrieveAllPages( Uri entryUri )
     {
-      var task = RetrieveAllPagesCore(entryUri);
-      task.RunSynchronously();
-      return task.Result;
+      return RetrieveAllPagesCore( entryUri );
     }
 
 
-    protected async Task<IHtmlDocument[]> RetrieveAllPagesCore(Uri entryUri)
+    protected async Task RetrieveAllPagesCore( Uri entryUri )
     {
 
-      var task = Client.Get(entryUri);
-      task.Wait();
-      if (task.IsFaulted)
-        throw new Exception();
-      var document = task.Result;
-      if (document == null)
-        return new IHtmlDocument[0];
+      var document = await Client.Get( entryUri );
+      if ( document == null )
+        return;
 
-      lock (sync)
+      lock ( sync )
       {
-        siteLinks.UnionWith(FindLinks(document));
+        siteLinks.UnionWith( FindLinks( document ) );
       }
 
-      if (IsObjective(document))
-        Save(document);
+      if ( IsObjective( document ) )
+        Save( document );
 
 
       List<IHtmlDocument> result = new List<IHtmlDocument>();
 
       string[] allLinks;
-      lock (sync)
+      lock ( sync )
       {
-        allLinks = siteLinks.Except(tracedLinks).ToArray();
+        allLinks = siteLinks.Except( tracedLinks ).ToArray();
       }
 
 
-      foreach (var link in allLinks)
+
+      var tasks = new List<Task>();
+
+      foreach ( var link in allLinks )
       {
-        var traceUri = new Uri(entryUri, link);
-        if (Tracable(entryUri, traceUri))
+        var traceUri = new Uri( entryUri, link );
+        if ( Tracable( entryUri, traceUri ) )
         {
-          lock (sync)
+          lock ( sync )
           {
             var traceLink = traceUri.AbsoluteUri;
-            if (tracedLinks.Contains(traceLink))
+            if ( tracedLinks.Contains( traceLink ) )
               continue;
 
-            tracedLinks.Add(traceLink);
+            tracedLinks.Add( traceLink );
           }
 
-          RetrieveAllPagesCore(traceUri);
-          result.AddRange(await );
+          tasks.Add( RetrieveAllPagesCore( traceUri ) );
         }
       }
 
-      return result.ToArray();
-
+      await Task.WhenAll( tasks.ToArray() );
     }
 
 
@@ -103,7 +99,7 @@ namespace Ivony.Html.Client
     /// </summary>
     /// <param name="document">要判断的文档</param>
     /// <returns>是否为要保存的目标文档</returns>
-    protected virtual bool IsObjective(IHtmlDocument document)
+    protected virtual bool IsObjective( IHtmlDocument document )
     {
       return true;
     }
@@ -113,12 +109,36 @@ namespace Ivony.Html.Client
     /// 保存指定文档
     /// </summary>
     /// <param name="document">要保存的文档</param>
-    protected virtual void Save(IHtmlDocument document)
+    protected virtual void Save( IHtmlDocument document )
     {
-      var filename = Guid.NewGuid().ToString("N") + ".html";
-      using (var stream = File.OpenWrite(Path.Combine(@"C:\Temp", filename)))
+
+      var path = document.DocumentUri.AbsolutePath;
+      Path.GetInvalidFileNameChars().ForAll( c => path = path.Replace( c, '_' ) );
+
+      path = Path.Combine( @"C:\Temp", Path.GetFileNameWithoutExtension( path ) + ".html" );
+
+      lock ( sync )
       {
-        document.Render(stream, Encoding.UTF8);
+        if ( File.Exists( path ) )
+        {
+          for ( int i = 0; i < int.MaxValue; i++ )
+          {
+            var _path = Path.GetFileNameWithoutExtension( path ) + "_" + i + ".html";
+            _path = Path.Combine( @"C:\Temp", _path );
+            if ( !File.Exists( _path ) )
+            {
+              path = _path;
+              break;
+            }
+          }
+
+        }
+
+      }
+
+      using ( var stream = File.OpenWrite( path ) )
+      {
+        document.Render( stream, Encoding.UTF8 );
       }
     }
 
@@ -129,19 +149,19 @@ namespace Ivony.Html.Client
     /// <param name="refer">引用来源</param>
     /// <param name="traceUri">需要判断的 URI 地址</param>
     /// <returns>是否可以进行追踪</returns>
-    protected virtual bool Tracable(Uri refer, Uri traceUri)
+    protected virtual bool Tracable( Uri refer, Uri traceUri )
     {
       return refer.Host == traceUri.Host;
     }
 
-    protected virtual IEnumerable<string> FindLinks(IHtmlDocument document)
+    protected virtual IEnumerable<string> FindLinks( IHtmlDocument document )
     {
 
       document.ResolveUriToAbsoluate();
 
-      foreach (var href in document.Find("a[href]").Select(element => element.Attribute("href").Value()))
+      foreach ( var href in document.Find( "a[href]" ).Select( element => element.Attribute( "href" ).Value() ) )
       {
-        var uri = new UriBuilder(new Uri(document.DocumentUri, href));
+        var uri = new UriBuilder( new Uri( document.DocumentUri, href ) );
         uri.Fragment = null;
         yield return uri.Uri.AbsoluteUri;
       }
