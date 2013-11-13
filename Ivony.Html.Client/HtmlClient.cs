@@ -15,6 +15,16 @@ namespace Ivony.Html.Client
     private HttpClient client = new HttpClient();
 
 
+    public HtmlClient() : this( new HttpClientHandler() ) { }
+
+    public HtmlClient( HttpMessageHandler handler ) : this( handler, true ) { }
+
+    public HtmlClient( HttpMessageHandler handler, bool disposeHandler )
+    {
+      client = new HttpClient( handler, disposeHandler );
+    }
+
+
     protected virtual IHtmlParser GetParser()
     {
       return new JumonyParser();
@@ -51,7 +61,6 @@ namespace Ivony.Html.Client
     {
       return await httpContent.ReadAsStringAsync();
     }
-
 
 
     public void Dispose()

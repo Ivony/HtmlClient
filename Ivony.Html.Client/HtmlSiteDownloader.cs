@@ -101,7 +101,7 @@ namespace Ivony.Html.Client
     /// <returns>是否为要保存的目标文档</returns>
     protected virtual bool IsObjective( IHtmlDocument document )
     {
-      return true;
+      return document.DocumentUri.Host.EqualsIgnoreCase( "www.cnblogs.com" );
     }
 
 
